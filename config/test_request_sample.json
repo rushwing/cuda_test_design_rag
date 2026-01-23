@@ -1,0 +1,41 @@
+{
+  "request_metadata": {
+    "tester_uid": "john.doe",
+    "tester_role": "SDET",
+    "request_datetime": "2024-01-23T10:30:00Z",
+    "request_id": "REQ-2024-0123-001"
+  },
+  "test_filters": {
+    "gpu_architecture": "Hopper",
+    "product_series": "Data Center",
+    "product": "H100",
+    "module_name": "Memory Management",
+    "cuda_solution_version": "12.2",
+    "cuda_module_version": "12.2.0",
+    "priority": "High",
+    "test_type": "Functional"
+  },
+  "generation_config": {
+    "num_few_shot_examples": 3,
+    "num_new_cases_to_generate": 5,
+    "focus_areas": [
+      "corner cases",
+      "error handling",
+      "boundary conditions"
+    ],
+    "exclude_existing_story_ids": [
+      "CUDA-MEM-001",
+      "CUDA-MEM-006"
+    ]
+  },
+  "prompt_context": {
+    "additional_requirements": "Focus on edge cases for large memory allocations (>4GB) and concurrent access patterns",
+    "target_framework": "GoogleTest",
+    "code_style": "NVIDIA internal guidelines"
+  },
+  "output_config": {
+    "output_format": "markdown",
+    "output_path": "./output/generated_tests_{request_id}.md",
+    "include_rationale": true
+  }
+}

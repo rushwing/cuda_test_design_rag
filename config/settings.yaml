@@ -1,0 +1,18 @@
+# CUDA Test RAG Configuration
+# Copy to .env or set as environment variables
+
+# Google Gemini Configuration (free API key at https://aistudio.google.com/apikey)
+# GOOGLE_API_KEY=your-api-key-here
+# LLM_MODEL=gemini-2.5-flash
+# EMBEDDING_MODEL=models/embedding-001
+# TEMPERATURE=0.1
+
+# RAG Configuration
+# CHUNK_SIZE=1000
+# CHUNK_OVERLAP=200
+# RETRIEVAL_K=4
+
+# Storage Configuration
+# VECTORSTORE_PATH=./data/vectorstore
+# COLLECTION_NAME=cuda_test_docs
+# DOCS_PATH=./data/docs
