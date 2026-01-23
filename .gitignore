@@ -57,7 +57,6 @@ dmypy.json
 # Data directories (keep structure, ignore contents)
 data/vectorstore/*
 !data/vectorstore/.gitkeep
-data/docs/*
 !data/docs/.gitkeep
 data/requests/*
 !data/requests/.gitkeep
