@@ -113,83 +113,88 @@ source cuda_venv/Scripts/activate
 
 ## Usage
 
-### Ingest Documents
+### 1. Ingest Documents
 
-Add your requirements and design documents to `data/docs/` or specify a path:
+Add your requirements and design documents to `data/knowledge_base/docs/`:
 
 ```bash
-# Ingest all documents from default directory
-cuda-test-rag ingest ./data/docs
-
-# Ingest a specific file
-cuda-test-rag ingest ./path/to/requirements.pdf
-
-# Clear existing documents and re-ingest
-cuda-test-rag ingest ./data/docs --clear
+cuda-test-rag ingest ./data/knowledge_base/docs
 ```
 
 Supported file formats: PDF, DOCX, TXT, Markdown
 
-### Multi-Stage Pipeline (Recommended)
+### 2. Configure Test Request
 
-#### Option A: Run Full Pipeline
+Edit the configuration file `config/test_request_sample.json`:
 
-```bash
-# Run both stages at once
-cuda-test-rag gen-pipeline "Generate tests for matrix multiplication kernel"
-
-# Save outputs to files
-cuda-test-rag gen-pipeline "Test memory management" \
-    --intents intents.yaml \
-    --skeletons tests.cu
-
-# Use RAG for Stage 2 as well (retrieve code examples)
-cuda-test-rag gen-pipeline "Test kernel launch" --rag-stage2
+```json
+{
+  "test_filters": {
+    "gpu_architecture": "Hopper",
+    "product_series": "Data Center",
+    "module_name": "Memory Management",
+    "cuda_solution_version": "12.2",
+    "priority": "High",
+    "test_type": "Functional"
+  },
+  "generation_config": {
+    "num_few_shot_examples": 3,
+    "focus_areas": ["corner cases", "error handling"]
+  }
+}
 ```
 
-#### Option B: Run Stages Separately
+### 3. Generate Test Cases
 
 ```bash
-# Stage 1: Generate test intents
-cuda-test-rag gen-intents "Test CUDA memory operations" -o intents.yaml
+# Auto mode: Run both stages (intents → test cases)
+./scripts/gen_test_cases.sh --auto
 
-# (Optional) Review and edit intents.yaml manually
+# Stage 1 only: Generate intents for review
+./scripts/gen_test_cases.sh --intent
 
-# Stage 2: Generate skeletons from intents
-cuda-test-rag gen-skeletons intents.yaml -o tests.cu
+# Approve intents after review
+./scripts/gen_test_cases.sh --approve REQ-xxxxxxxx-xxxxxx
+
+# Stage 2 only: Generate test cases from approved intents
+./scripts/gen_test_cases.sh --case -r REQ-xxxxxxxx-xxxxxx
+
+# List all requests
+./scripts/gen_test_cases.sh --list
 ```
 
-### Legacy Single-Stage Generation
+### 4. Review Generated Files
+
+Generated files are saved to `data/requests/<request_id>/`:
+- `intents.yaml` - Test intents from Stage 1
+- `test_cases.md` - Generated test cases from Stage 2
+
+### Utility Commands
 
 ```bash
-# Generate tests directly (single LLM call)
-cuda-test-rag generate "Generate unit tests for matrix multiplication"
+# Clean generated files
+./scripts/clean.sh
+
+# Clean everything including vectorstore
+./scripts/clean.sh --all
+
+# Preview what would be deleted
+./scripts/clean.sh --dry-run
 ```
 
-### Search Documents
-
-```bash
-# Search for relevant documents
-cuda-test-rag search "memory management requirements"
-```
-
-### Clear Vector Store
-
-```bash
-cuda-test-rag clear
-```
-
-## CLI Commands
+## CLI Reference
 
 | Command | Description |
 |---------|-------------|
-| `ingest` | Ingest documents into vector store |
-| `gen-pipeline` | Run full multi-stage pipeline |
-| `gen-intents` | Stage 1: Generate test intents |
-| `gen-skeletons` | Stage 2: Generate test skeletons |
-| `generate` | Legacy single-stage generation |
-| `search` | Search documents |
-| `clear` | Clear vector store |
+| `./scripts/gen_test_cases.sh --auto` | Run full pipeline (both stages) |
+| `./scripts/gen_test_cases.sh --intent` | Stage 1: Generate test intents |
+| `./scripts/gen_test_cases.sh --case -r <ID>` | Stage 2: Generate test cases |
+| `./scripts/gen_test_cases.sh --approve <ID>` | Approve intents for Stage 2 |
+| `./scripts/gen_test_cases.sh --list` | List all requests |
+| `./scripts/clean.sh` | Clean generated files |
+| `cuda-test-rag ingest <path>` | Ingest documents into vector store |
+| `cuda-test-rag search <query>` | Search documents |
+| `cuda-test-rag clear` | Clear vector store |
 
 ## Project Structure
 

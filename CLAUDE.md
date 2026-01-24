@@ -110,17 +110,19 @@ All settings in `config.py` via pydantic-settings. Key env vars:
 
 ```bash
 # Ingest documents
-cuda-test-rag ingest ./data/docs
+cuda-test-rag ingest ./data/knowledge_base/docs
 
-# Multi-stage (recommended)
-cuda-test-rag gen-pipeline "test description" -i intents.yaml -s tests.cu
+# Generate test cases (using shell script wrapper)
+./scripts/gen_test_cases.sh --auto                     # Run both stages
+./scripts/gen_test_cases.sh --intent                   # Stage 1 only
+./scripts/gen_test_cases.sh --approve REQ-xxx          # Approve intents
+./scripts/gen_test_cases.sh --case -r REQ-xxx          # Stage 2 only
+./scripts/gen_test_cases.sh --list                     # List requests
 
-# Separate stages
-cuda-test-rag gen-intents "test description" -o intents.yaml
-cuda-test-rag gen-skeletons intents.yaml -o tests.cu
-
-# Legacy single-stage
-cuda-test-rag generate "test description" -o tests.cu
+# Utility commands
+./scripts/clean.sh                                     # Clean generated files
+cuda-test-rag search "query"                           # Search documents
+cuda-test-rag clear                                    # Clear vector store
 ```
 
 ## Testing Patterns
