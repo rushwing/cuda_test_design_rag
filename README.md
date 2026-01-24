@@ -92,12 +92,34 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ### 3. Configure Environment
 
-Get your free API key from https://aistudio.google.com/apikey
+Create a `.env` file from the example template:
 
-Edit `.env` and add your Google AI API key:
-```env
-GOOGLE_API_KEY=your-google-api-key-here
+```bash
+cp .env.example .env
 ```
+
+Edit `.env` and configure the following settings:
+
+```env
+# Required: Get your free API key from https://aistudio.google.com/apikey
+GOOGLE_API_KEY=your-google-api-key-here
+
+# Optional: Use local embeddings instead of Google API (default: false)
+# Set to true to use HuggingFace embeddings locally (no API calls for embeddings)
+USE_LOCAL_EMBEDDINGS=false
+
+# Optional: Local embedding model (default: all-MiniLM-L6-v2)
+# Only used when USE_LOCAL_EMBEDDINGS=true
+# Other options: sentence-transformers/all-mpnet-base-v2, BAAI/bge-small-en-v1.5
+LOCAL_EMBEDDING_MODEL=all-MiniLM-L6-v2
+```
+
+**Embedding Options:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Google API (default) | Higher quality, no local resources | Requires API calls |
+| Local HuggingFace | No API costs, works offline | Uses local CPU/GPU, slightly lower quality |
 
 ### 4. Activate Virtual Environment
 
@@ -236,13 +258,15 @@ Configuration can be set via environment variables or `.env` file:
 |----------|---------|-------------|
 | `GOOGLE_API_KEY` | (required) | Google AI API key (free) |
 | `LLM_MODEL` | `gemini-2.5-flash` | LLM model for generation |
-| `EMBEDDING_MODEL` | `models/embedding-001` | Embedding model |
+| `EMBEDDING_MODEL` | `models/embedding-001` | Google embedding model |
+| `USE_LOCAL_EMBEDDINGS` | `false` | Use local HuggingFace embeddings |
+| `LOCAL_EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local embedding model name |
 | `TEMPERATURE` | `0.1` | Generation temperature |
 | `CHUNK_SIZE` | `1000` | Document chunk size |
 | `CHUNK_OVERLAP` | `200` | Chunk overlap |
 | `RETRIEVAL_K` | `4` | Number of documents to retrieve |
 | `VECTORSTORE_PATH` | `./data/vectorstore` | Vector store location |
-| `DOCS_PATH` | `./data/docs` | Documents directory |
+| `DOCS_PATH` | `./data/knowledge_base/docs` | Documents directory |
 
 ## Programmatic Usage
 
