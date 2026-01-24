@@ -25,11 +25,10 @@ author: CUDA QA Team
 created_date: "2024-03-20"
 last_updated: "2024-03-20"
 tags:
-
-* unified-memory
-* cudaMallocManaged
-* prefetch
-* mem-advise
+  - unified-memory
+  - cudaMallocManaged
+  - prefetch
+  - mem-advise
 
 ---
 

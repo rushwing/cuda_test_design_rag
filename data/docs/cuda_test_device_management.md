@@ -25,11 +25,10 @@ author: CUDA QA Team
 created_date: "2024-04-05"
 last_updated: "2024-04-05"
 tags:
-
-* device-management
-* cudaSetDevice
-* device-properties
-* reset
+  - device-management
+  - cudaSetDevice
+  - device-properties
+  - reset
 
 ---
 

@@ -25,11 +25,10 @@ author: CUDA QA Team
 created_date: "2024-04-01"
 last_updated: "2024-04-01"
 tags:
-
-* graphs
-* cudaGraphCreate
-* cudaGraphLaunch
-* orchestration
+  - graphs
+  - cudaGraphCreate
+  - cudaGraphLaunch
+  - orchestration
 
 ---
 

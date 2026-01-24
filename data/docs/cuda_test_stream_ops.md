@@ -25,11 +25,10 @@ author: CUDA QA Team
 created_date: "2024-03-15"
 last_updated: "2024-03-15"
 tags:
-
-* streams
-* synchronization
-* events
-* concurrency
+  - streams
+  - synchronization
+  - events
+  - concurrency
 
 ---
 
