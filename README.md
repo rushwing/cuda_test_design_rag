@@ -7,21 +7,29 @@ A RAG (Retrieval-Augmented Generation) client for generating CUDA test suites fr
 This tool uses LangChain and Google Gemini (free) to:
 1. Ingest and index your CUDA requirements/design documents
 2. Retrieve relevant context based on your queries
-3. Generate comprehensive CUDA test suites using a **two-stage pipeline**
+3. Generate comprehensive CUDA test suites using a **multi-stage pipeline**
 
-## Two-Stage Generation Pipeline
+## Multi-Stage Generation Pipeline
 
-For more stable and controllable test generation, this tool uses a two-stage approach:
+For more stable and controllable test generation, this tool uses a multi-stage approach:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Shared RAG Pipeline                       │
-│  ┌──────────┐    ┌──────────────┐    ┌─────────────────┐   │
-│  │  Ingest  │───▶│ Vector Store │───▶│    Retriever    │   │
-│  └──────────┘    └──────────────┘    └────────┬────────┘   │
-└───────────────────────────────────────────────┼─────────────┘
-                                                │
-                    ┌───────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                           Shared RAG Pipeline                                 │
+│                                                                               │
+│  ┌──────────┐    ┌────────────────────┐    ┌──────────────┐    ┌──────────┐  │
+│  │  Ingest  │───▶│ Embed (Google/HF)  │───▶│   ChromaDB   │───▶│ Top-K    │  │
+│  └──────────┘    └────────────────────┘    └──────────────┘    │ Retrieve │  │
+│                                                                └────┬─────┘  │
+│                                                                     │        │
+│                                            ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ▼ ─ ─ ┐  │
+│                                            │   Rerank [TODO]             │  │
+│                                            │   (Cohere/Cross-Encoder)    │  │
+│                                            └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┬ ─ ─ ┘  │
+│                                                                     │        │
+└─────────────────────────────────────────────────────────────────────┼────────┘
+                                                                      │
+                    ┌─────────────────────────────────────────────────┘
                     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │          Stage 1: Requirements → Test Intents (RAG)          │
@@ -30,14 +38,20 @@ For more stable and controllable test generation, this tool uses a two-stage app
                                                 │
                                                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│          Stage 2: Test Intents → Test Skeletons              │
-│  Generate HOW to test (code structure)                       │
+│          Stage 2: Test Intents → Test Cases                  │
+│  Generate detailed test case descriptions                    │
 └─────────────────────────────────────────────────────────────┘
+                                                │
+                                                ▼
+┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+│          Stage 3: Test Cases → Test Skeletons  [TODO]        │
+│  Generate GoogleTest C++ code skeletons                      │
+└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
 ```
 
 **Benefits:**
-- **Debuggability**: Inspect/validate test intents before code generation
-- **Human-in-the-loop**: Engineers can review/edit intents
+- **Debuggability**: Inspect/validate test intents and cases before code generation
+- **Human-in-the-loop**: Engineers can review/edit intents and test cases
 - **Cacheability**: Reuse intents for different skeleton styles
 - **Retry granularity**: Re-run only failed stages
 
@@ -116,7 +130,7 @@ cuda-test-rag ingest ./data/docs --clear
 
 Supported file formats: PDF, DOCX, TXT, Markdown
 
-### Two-Stage Pipeline (Recommended)
+### Multi-Stage Pipeline (Recommended)
 
 #### Option A: Run Full Pipeline
 
@@ -170,7 +184,7 @@ cuda-test-rag clear
 | Command | Description |
 |---------|-------------|
 | `ingest` | Ingest documents into vector store |
-| `gen-pipeline` | Run full two-stage pipeline |
+| `gen-pipeline` | Run full multi-stage pipeline |
 | `gen-intents` | Stage 1: Generate test intents |
 | `gen-skeletons` | Stage 2: Generate test skeletons |
 | `generate` | Legacy single-stage generation |
@@ -201,7 +215,7 @@ cuda_test_design_rag/
 │   │   └── splitter.py        # Text chunking
 │   ├── test_generation/       # Test generation
 │   │   ├── generator.py       # Legacy single-stage generator
-│   │   ├── pipeline.py        # Two-stage pipeline
+│   │   ├── pipeline.py        # Multi-stage pipeline
 │   │   ├── models.py          # Data models (TestIntent, etc.)
 │   │   └── prompts.py         # Prompt templates
 │   └── utils/
@@ -227,7 +241,7 @@ Configuration can be set via environment variables or `.env` file:
 
 ## Programmatic Usage
 
-### Two-Stage Pipeline
+### Multi-Stage Pipeline
 
 ```python
 from cuda_test_rag.config import Settings
@@ -260,6 +274,175 @@ settings = Settings()
 generator = CUDATestGenerator(settings)
 result = generator.retrieve_and_generate("Generate tests for cudaMemcpy")
 print(result["generated_tests"])
+```
+
+## Architecture
+
+### System Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              CLI Entry Point (cli.py)                           │
+│  ┌────────────┬──────────────┬─────────────┬──────────────┬──────────────────┐  │
+│  │  ingest    │  gen-intents │gen-skeletons│ gen-pipeline │    generate      │  │
+│  │  (docs)    │  (Stage 1)   │ (Stage 2)   │ (Full pipeline)│   (legacy)     │  │
+│  └─────┬──────┴──────┬───────┴──────┬──────┴───────┬──────┴────────┬─────────┘  │
+└────────│─────────────│──────────────│──────────────│───────────────│────────────┘
+         │             │              │              │               │
+         ▼             └──────────────┴──────┬───────┴───────────────┘
+┌─────────────────┐                          │
+│   INGEST FLOW   │                          ▼
+└────────┬────────┘            ┌──────────────────────────────────────────────────┐
+         │                     │           GENERATION FLOW                        │
+         ▼                     └──────────────────────────────────────────────────┘
+┌─────────────────────────┐                  │
+│  document_processing/   │                  ▼
+│  ┌───────────────────┐  │    ┌───────────────────────────────────────────────────┐
+│  │  DocumentLoader   │  │    │              test_generation/                     │
+│  │  ├─ PDF           │  │    │  ┌─────────────────────────────────────────────┐  │
+│  │  ├─ DOCX          │  │    │  │      TestGenerationPipeline (pipeline.py)   │  │
+│  │  ├─ TXT           │  │    │  │  ┌─────────────┐ ┌─────────────┐ ┌────────┐ │  │
+│  │  └─ MD            │  │    │  │  │  STAGE 1    │ │  STAGE 2    │ │STAGE 3 │ │  │
+│  └─────────┬─────────┘  │    │  │  │  Intents    │ │  Test Cases │ │Skeleton│ │  │
+│            │            │    │  │  │  (YAML)     │→│  (Details)  │→│ [TODO] │ │  │
+│            ▼            │    │  │  └─────────────┘ └─────────────┘ └────────┘ │  │
+│  ┌───────────────────┐  │    │  └─────────────────────────────────────────────┘  │
+│  │ DocumentSplitter  │  │    │                                                   │
+│  │ ├─ by_test_case   │  │    │  ┌─────────────────────────────────────────────┐  │
+│  │ ├─ by_section     │  │    │  │  TestPromptTemplates (prompts.py)           │  │
+│  │ └─ default        │  │    │  │  ├─ Intent generation prompts               │  │
+│  └─────────┬─────────┘  │    │  │  ├─ Test case generation prompts            │  │
+│            │            │    │  │  └─ Few-shot examples                       │  │
+└────────────│────────────┘    │  └─────────────────────────────────────────────┘  │
+             │                 │                                                   │
+             │                 │  ┌─────────────────────────────────────────────┐  │
+             │                 │  │  Models (models.py)                         │  │
+             │                 │  │  ├─ TestIntent, TestIntentCollection        │  │
+             │                 │  │  ├─ TestSkeleton, PipelineResult            │  │
+             │                 │  │  └─ TestCategory, TestPriority (enums)      │  │
+             │                 │  └─────────────────────────────────────────────┘  │
+             │                 └───────────────────────────────────────────────────┘
+             │                                       │
+             ▼                                       │
+┌────────────────────────────────────────────────────│──────────────────────────────┐
+│                            core/ (RAG Layer)       │                              │
+│  ┌───────────────────┐                             ▼                              │
+│  │  EmbeddingManager │◄────────────────────────────────────────────┐              │
+│  │  (embeddings.py)  │                                             │              │
+│  │  ├─ GoogleGenAI   │                                             │              │
+│  │  │   Embeddings   │                         ┌───────────────────┴───────────┐  │
+│  │  └─ HuggingFace   │                         │   DocumentRetriever           │  │
+│  │     (local opt.)  │                         │   (retriever.py)              │  │
+│  └─────────┬─────────┘                         │   ├─ retrieve(query, k)       │  │
+│            │                                   │   ├─ retrieve_with_scores()   │  │
+│            ▼                                   │   └─ get_retriever()          │  │
+│  ┌───────────────────┐                         └───────────────┬───────────────┘  │
+│  │ VectorStoreManager│◄────────────────────────────────────────┘                  │
+│  │  (vectorstore.py) │                                                            │
+│  │  ├─ add_documents │          ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐  │
+│  │  ├─ similarity_   │          │  Reranker [TODO]                             │  │
+│  │  │   search       │          │  (Cohere Rerank / Cross-Encoder / BGE)       │  │
+│  │  └─ clear         │          └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘  │
+│  └─────────┬─────────┘                                                            │
+└────────────│──────────────────────────────────────────────────────────────────────┘
+             │
+             ▼
+┌────────────────────────────────────────┐    ┌──────────────────────────────────────┐
+│            ChromaDB                    │    │          storage/                    │
+│  ┌──────────────────────────────────┐  │    │  ┌──────────────────────────────┐   │
+│  │  data/vectorstore/               │  │    │  │  RequestDatabase             │   │
+│  │  (Persistent Vector Collection)  │  │    │  │  (database.py)               │   │
+│  └──────────────────────────────────┘  │    │  │  └─ SQLite: data/requests.db │   │
+└────────────────────────────────────────┘    │  ├──────────────────────────────┤   │
+                                              │  │  TestFileManager             │   │
+                                              │  │  (file_manager.py)           │   │
+                                              │  └──────────────────────────────┘   │
+                                              └──────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                           External Services (LangChain Stack)                      │
+│  ┌────────────────────┐  ┌─────────────────────┐  ┌─────────────────────────────┐  │
+│  │ langchain_google_  │  │ langchain_chroma    │  │ langchain_community         │  │
+│  │ genai              │  │ └─ Chroma wrapper   │  │ └─ Document loaders         │  │
+│  │ ├─ GoogleGenAI     │  └─────────────────────┘  └─────────────────────────────┘  │
+│  │ │  Embeddings      │                                                            │
+│  │ └─ ChatGoogleGenAI │            ┌─────────────────────────────────────────┐     │
+│  │    (LLM)           │◄───────────│  Google Gemini API (gemini-2.5-flash)   │     │
+│  └────────────────────┘            └─────────────────────────────────────────┘     │
+└────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow Summary
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                              Data Flow Summary                                     │
+│                                                                                    │
+│   Documents ──► Loader ──► Splitter ──► Embeddings ──► ChromaDB                   │
+│                                                             │                      │
+│   User Query ──────────────────────────────────────────────►│                      │
+│                                                             ▼                      │
+│                                          ┌──────────────────────────────┐          │
+│                                          │   RAG Retrieval (Top-K)      │          │
+│                                          │   (Google/HuggingFace Embed) │          │
+│                                          └──────────────┬───────────────┘          │
+│                                                         ▼                          │
+│                                          ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐          │
+│                                          │   Rerank [TODO]              │          │
+│                                          │   (Cohere/Cross-Encoder)     │          │
+│                                          └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘          │
+│                                                         ▼                          │
+│                                          ┌──────────────────────────────┐          │
+│                                          │   Stage 1: Intent Generation │          │
+│                                          │   Query + Context → YAML     │          │
+│                                          └──────────────┬───────────────┘          │
+│                                                         ▼                          │
+│                                          ┌──────────────────────────────┐          │
+│                                          │   [Optional: Human Review]   │          │
+│                                          └──────────────┬───────────────┘          │
+│                                                         ▼                          │
+│                                          ┌──────────────────────────────┐          │
+│                                          │   Stage 2: Test Case Gen     │          │
+│                                          │   Intents → Test Cases       │          │
+│                                          └──────────────┬───────────────┘          │
+│                                                         ▼                          │
+│                                          ┌──────────────────────────────┐          │
+│                                          │   [Optional: Human Review]   │          │
+│                                          └──────────────┬───────────────┘          │
+│                                                         ▼                          │
+│                                          ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐          │
+│                                          │   Stage 3: Skeleton Gen      │          │
+│                                          │   Test Cases → C++ [TODO]    │          │
+│                                          └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘          │
+│                                                         ▼                          │
+│                                          ┌──────────────────────────────┐          │
+│                                          │   Output: tests.cu           │          │
+│                                          └──────────────────────────────┘          │
+└────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Module Dependency Graph
+
+```
+                        ┌────────────┐
+                        │  config.py │  (Settings - loaded by all modules)
+                        │  Settings  │
+                        └─────┬──────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+┌───────────────┐    ┌────────────────┐    ┌─────────────────┐
+│     core/     │    │ document_      │    │ test_generation/│
+│               │    │ processing/    │    │                 │
+│ EmbeddingMgr  │    │                │    │ Pipeline        │
+│      │        │    │ Loader         │    │ Generator       │
+│      ▼        │    │    │           │    │ Models          │
+│ VectorStore   │◄───│    ▼           │    │ Prompts         │
+│      │        │    │ Splitter       │    │                 │
+│      ▼        │    └────────────────┘    └────────┬────────┘
+│ Retriever     │◄──────────────────────────────────┘
+└───────────────┘
 ```
 
 ## Development
