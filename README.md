@@ -190,6 +190,7 @@ Edit the configuration file `config/test_request_sample.json`:
 Generated files are saved to `data/requests/<request_id>/`:
 - `intents.yaml` - Test intents from Stage 1
 - `test_cases.md` - Generated test cases from Stage 2
+- `test_code.cpp` - Compilable GoogleTest C++ code from Stage 3
 
 ### Utility Commands
 
@@ -215,6 +216,10 @@ Generated files are saved to `data/requests/<request_id>/`:
 | `./scripts/gen_test_cases.sh --list` | List all requests |
 | `./scripts/clean.sh` | Clean generated files |
 | `cuda-test-rag ingest <path>` | Ingest documents into vector store |
+| `cuda-test-rag gen-intents <query>` | Stage 1: Generate test intents |
+| `cuda-test-rag gen-skeletons <intents.yaml>` | Stage 2: Generate test cases (Markdown) |
+| `cuda-test-rag gen-code <cases.md>` | Stage 3: Generate compilable C++ code |
+| `cuda-test-rag gen-pipeline <query> --stages 3` | Run full 3-stage pipeline |
 | `cuda-test-rag search <query>` | Search documents |
 | `cuda-test-rag clear` | Clear vector store |
 
@@ -235,6 +240,7 @@ cuda_test_design_rag/
 │   ├── config.py              # Settings management
 │   ├── core/                  # RAG core functionality
 │   │   ├── embeddings.py      # Embedding management
+│   │   ├── reranker.py        # BGE reranker (optional)
 │   │   ├── retriever.py       # Document retrieval
 │   │   └── vectorstore.py     # Vector store operations
 │   ├── document_processing/   # Document handling
@@ -265,6 +271,9 @@ Configuration can be set via environment variables or `.env` file:
 | `CHUNK_SIZE` | `1000` | Document chunk size |
 | `CHUNK_OVERLAP` | `200` | Chunk overlap |
 | `RETRIEVAL_K` | `4` | Number of documents to retrieve |
+| `RERANKER_TYPE` | `none` | Reranker type: `bge` or `none` |
+| `RERANKER_MODEL` | `BAAI/bge-reranker-v2-m3` | BGE reranker model name |
+| `RERANKER_TOP_K` | _(same as RETRIEVAL_K)_ | Docs to return after reranking |
 | `VECTORSTORE_PATH` | `./data/vectorstore` | Vector store location |
 | `DOCS_PATH` | `./data/knowledge_base/docs` | Documents directory |
 
@@ -279,18 +288,22 @@ from cuda_test_rag.test_generation import TestGenerationPipeline
 settings = Settings()
 pipeline = TestGenerationPipeline(settings)
 
-# Run full pipeline
-result = pipeline.run_full_pipeline("Test memory operations")
+# Run full 3-stage pipeline (intents → test cases → C++ code)
+result = pipeline.run_full_pipeline_3stage("Test memory operations")
 print(f"Generated {len(result.test_intents.test_intents)} intents")
-print(result.test_skeletons)
+print(result.test_code)  # compilable GoogleTest C++ code
 
-# Or run stages separately
+# Or run stages separately for human-in-the-loop review
 intents, context, sources = pipeline.generate_intents("Test memory ops")
 pipeline.save_intents(intents, "intents.yaml")
 
-# Later, load and generate skeletons
+# Stage 2: generate test case descriptions (Markdown)
 intents = pipeline.load_intents("intents.yaml")
-skeletons = pipeline.generate_skeletons(intents)
+test_cases_md = pipeline.generate_skeletons(intents)  # returns Markdown
+
+# Stage 3: generate compilable C++ from test cases
+code = pipeline.generate_code(test_cases_md)
+pipeline.save_code(code, "tests.cpp")
 ```
 
 ### Legacy Single-Stage
@@ -332,8 +345,8 @@ print(result["generated_tests"])
 │  │  ├─ DOCX          │  │    │  │      TestGenerationPipeline (pipeline.py)   │  │
 │  │  ├─ TXT           │  │    │  │  ┌─────────────┐ ┌─────────────┐ ┌────────┐ │  │
 │  │  └─ MD            │  │    │  │  │  STAGE 1    │ │  STAGE 2    │ │STAGE 3 │ │  │
-│  └─────────┬─────────┘  │    │  │  │  Intents    │ │  Test Cases │ │Skeleton│ │  │
-│            │            │    │  │  │  (YAML)     │→│  (Details)  │→│ [TODO] │ │  │
+│  └─────────┬─────────┘  │    │  │  │  Intents    │ │  Test Cases │ │C++ Code│ │  │
+│            │            │    │  │  │  (YAML)     │→│  (Markdown) │→│ (.cpp) │ │  │
 │            ▼            │    │  │  └─────────────┘ └─────────────┘ └────────┘ │  │
 │  ┌───────────────────┐  │    │  └─────────────────────────────────────────────┘  │
 │  │ DocumentSplitter  │  │    │                                                   │
@@ -347,6 +360,7 @@ print(result["generated_tests"])
              │                 │  ┌─────────────────────────────────────────────┐  │
              │                 │  │  Models (models.py)                         │  │
              │                 │  │  ├─ TestIntent, TestIntentCollection        │  │
+             │                 │  │  ├─ TestCase, TestCaseCollection            │  │
              │                 │  │  ├─ TestSkeleton, PipelineResult            │  │
              │                 │  │  └─ TestCategory, TestPriority (enums)      │  │
              │                 │  └─────────────────────────────────────────────┘  │
@@ -368,10 +382,10 @@ print(result["generated_tests"])
 │  ┌───────────────────┐                         └───────────────┬───────────────┘  │
 │  │ VectorStoreManager│◄────────────────────────────────────────┘                  │
 │  │  (vectorstore.py) │                                                            │
-│  │  ├─ add_documents │          ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐  │
-│  │  ├─ similarity_   │          │  Reranker [TODO]                             │  │
-│  │  │   search       │          │  (Cohere Rerank / Cross-Encoder / BGE)       │  │
-│  │  └─ clear         │          └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘  │
+│  │  ├─ add_documents │          ┌──────────────────────────────────────────────┐  │
+│  │  ├─ similarity_   │          │  BGEReranker (reranker.py) [Optional]        │  │
+│  │  │   search       │          │  RERANKER_TYPE=bge to enable                 │  │
+│  │  └─ clear         │          └──────────────────────────────────────────────┘  │
 │  └─────────┬─────────┘                                                            │
 └────────────│──────────────────────────────────────────────────────────────────────┘
              │
@@ -417,8 +431,8 @@ print(result["generated_tests"])
 │                                          └──────────────┬───────────────┘          │
 │                                                         ▼                          │
 │                                          ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐          │
-│                                          │   Rerank [TODO]              │          │
-│                                          │   (Cohere/Cross-Encoder)     │          │
+│                                          │  BGE Rerank [Optional]       │          │
+│                                          │  RERANKER_TYPE=bge to enable │          │
 │                                          └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘          │
 │                                                         ▼                          │
 │                                          ┌──────────────────────────────┐          │
@@ -439,10 +453,10 @@ print(result["generated_tests"])
 │                                          │   [Optional: Human Review]   │          │
 │                                          └──────────────┬───────────────┘          │
 │                                                         ▼                          │
-│                                          ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐          │
-│                                          │   Stage 3: Skeleton Gen      │          │
-│                                          │   Test Cases → C++ [TODO]    │          │
-│                                          └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘          │
+│                                          ┌──────────────────────────────┐          │
+│                                          │   Stage 3: C++ Code Gen      │          │
+│                                          │   Test Cases → .cpp file     │          │
+│                                          └──────────────┬───────────────┘          │
 │                                                         ▼                          │
 │                                          ┌──────────────────────────────┐          │
 │                                          │   Output: tests.cu           │          │
