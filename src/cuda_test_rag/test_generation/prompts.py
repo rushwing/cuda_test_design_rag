@@ -354,3 +354,124 @@ Generate the test cases in the same markdown format as the examples."""
             ("system", cls.TESTCASE_SYSTEM_TEMPLATE),
             ("human", cls.TESTCASE_GENERATION_TEMPLATE),
         ])
+
+    # ========== Stage 3: Full C++ Code Generation ==========
+
+    CODE_GEN_SYSTEM_TEMPLATE = """You are an expert CUDA test engineer with deep knowledge of:
+- GoogleTest framework
+- CUDA runtime APIs (driver and runtime)
+- GPU memory management
+- Kernel execution patterns
+- Error handling best practices
+- Performance testing
+
+Your task is to generate COMPLETE, COMPILABLE C++ test code based on test case specifications.
+The code must:
+- Include all necessary headers
+- Have proper namespace usage
+- Follow GoogleTest conventions
+- Include proper CUDA error checking macros
+- Be ready to compile and run"""
+
+    CODE_GEN_TEMPLATE = """Based on the following test case specifications, generate COMPLETE
+and COMPILABLE CUDA test code using GoogleTest framework.
+
+## Test Cases:
+{test_cases}
+
+## CUDA Context:
+{context}
+
+## Requirements:
+1. Generate complete, compilable C++ code (not skeletons)
+2. Include proper #include statements:
+   - <gtest/gtest.h>
+   - <cuda_runtime.h>
+   - <stdio.h>, <stdlib.h> as needed
+3. Define CUDA_CHECK() macro for error checking
+4. Create fixture class if shared setup is needed
+5. Implement actual kernel launch and verification logic
+6. Include proper memory allocation/deallocation
+7. Add ASSERT_* and EXPECT_* macros appropriately
+8. Include cleanup in TearDown if needed
+
+## Output Format:
+```cpp
+#include <gtest/gtest.h>
+#include <cuda_runtime.h>
+#include <stdio.h>
+
+// Error checking macro
+#define CUDA_CHECK(call) \\
+    do { \\
+        cudaError_t err = call; \\
+        if (err != cudaSuccess) { \\
+            fprintf(stderr, "CUDA error at %s:%d: %s\\n", __FILE__, __LINE__, \\
+                    cudaGetErrorString(err)); \\
+            FAIL() << "CUDA error"; \\
+        } \\
+    } while (0)
+
+// Helper functions if needed
+static void setupDevice(int deviceId = 0) {{
+    int deviceCount;
+    CUDA_CHECK(cudaGetDeviceCount(&deviceCount));
+    if (deviceId >= deviceCount) deviceId = 0;
+    CUDA_CHECK(cudaSetDevice(deviceId));
+}}
+
+// Test fixture (if applicable)
+class TestFixtureName : public ::testing::Test {{
+protected:
+    void SetUp() override {{
+        setupDevice();
+        // TODO: Allocate test memory
+    }}
+    
+    void TearDown() override {{
+        // TODO: Free test memory
+        cudaDeviceReset();
+    }}
+}};
+
+// Actual test implementations
+TEST_F(TestFixtureName, TestCaseName) {{
+    // Actual implementation with working code
+    float* d_data;
+    size_t size = N * sizeof(float);
+    
+    CUDA_CHECK(cudaMalloc(&d_data, size));
+    
+    // Kernel launch
+    dim3 block(256);
+    dim3 grid((N + block.x - 1) / block.x);
+    kernelName<<<grid, block>>>(d_data);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+    
+    // Verification
+    std::vector<float> h_result(N);
+    CUDA_CHECK(cudaMemcpy(h_result.data(), d_data, size, cudaMemcpyDeviceToHost));
+    
+    for (int i = 0; i < N; ++i) {{
+        EXPECT_FLOAT_EQ(h_result[i], expected[i]);
+    }}
+    
+    CUDA_CHECK(cudaFree(d_data));
+}}
+
+int main(int argc, char** argv) {{
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}}
+```
+
+Generate complete code for ALL provided test cases. Include realistic test data and assertions."""
+
+    @classmethod
+    def get_code_generation_prompt(cls) -> ChatPromptTemplate:
+        """Get the Stage 3 full C++ code generation prompt."""
+        return ChatPromptTemplate.from_messages([
+            ("system", cls.CODE_GEN_SYSTEM_TEMPLATE),
+            ("human", cls.CODE_GEN_TEMPLATE),
+        ])

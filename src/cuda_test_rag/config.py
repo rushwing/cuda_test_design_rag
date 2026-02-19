@@ -1,6 +1,7 @@
 """Configuration management using pydantic-settings."""
 
 from pathlib import Path
+from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,6 +30,15 @@ class Settings(BaseSettings):
     chunk_size: int = Field(default=1000, description="Document chunk size")
     chunk_overlap: int = Field(default=200, description="Chunk overlap size")
     retrieval_k: int = Field(default=4, description="Number of documents to retrieve")
+    reranker_type: str = Field(default="none", description="Reranker type: bge, none")
+    reranker_model: str = Field(
+        default="BAAI/bge-reranker-v2-m3",
+        description="Reranker model name",
+    )
+    reranker_top_k: Optional[int] = Field(
+        default=None,
+        description="Number of docs to return after reranking (default: same as retrieval_k)",
+    )
 
     # Storage settings
     vectorstore_path: str = Field(

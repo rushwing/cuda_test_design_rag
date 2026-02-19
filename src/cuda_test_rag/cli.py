@@ -193,26 +193,74 @@ def generate_skeletons(
         console.print(f"\n[green]Skeletons saved to:[/green] {output}")
 
 
+@app.command("gen-code")
+def generate_code(
+    test_cases_file: Path = typer.Argument(..., help="Path to test cases file (markdown) from Stage 2"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file for generated C++ code"),
+    use_rag: bool = typer.Option(False, "--rag", "-r", help="Use RAG for code generation context"),
+    k: int = typer.Option(4, "--k", "-k", help="Number of documents to retrieve for RAG"),
+):
+    """Stage 3: Generate complete C++ test code from test cases."""
+    setup_logging()
+    settings = Settings()
+
+    console.print("[bold blue]Stage 3: Generating C++ Test Code[/bold blue]")
+    console.print(f"Loading test cases from: {test_cases_file}\n")
+
+    pipeline = TestGenerationPipeline(settings)
+
+    # Load test cases
+    test_cases = test_cases_file.read_text()
+    console.print(f"[green]Loaded test cases ({len(test_cases)} chars)[/green]\n")
+
+    # Generate code
+    console.print("[yellow]Generating C++ code...[/yellow]")
+    if use_rag:
+        code, context = pipeline.generate_code_with_rag(test_cases, k=k)
+        console.print(f"[dim]Retrieved {len(context)} chars of context[/dim]")
+    else:
+        code = pipeline.generate_code(test_cases)
+
+    # Display code
+    console.print("\n[green]Generated C++ Code:[/green]")
+    syntax = Syntax(code, "cpp", theme="monokai", line_numbers=True)
+    console.print(Panel(syntax, title="CUDA Test Code"))
+
+    # Save to file
+    if output:
+        pipeline.save_code(code, output)
+        console.print(f"\n[green]Code saved to:[/green] {output}")
+
+
 @app.command("gen-pipeline")
 def generate_pipeline(
     query: str = typer.Argument(..., help="Description of what to test"),
     intents_output: Optional[Path] = typer.Option(None, "--intents", "-i", help="Output file for intents"),
     skeletons_output: Optional[Path] = typer.Option(None, "--skeletons", "-s", help="Output file for skeletons"),
+    code_output: Optional[Path] = typer.Option(None, "--code", help="Output file for generated C++ code"),
     k: int = typer.Option(4, "--k", "-k", help="Number of documents to retrieve"),
-    rag_stage2: bool = typer.Option(False, "--rag-stage2", help="Use RAG for Stage 2 as well"),
+    stages: int = typer.Option(2, "--stages", "-n", help="Number of stages (2 or 3)"),
+    rag_later_stages: bool = typer.Option(False, "--rag-all", help="Use RAG for all stages"),
 ):
-    """Run the full two-stage pipeline (intents -> skeletons)."""
+    """Run the full pipeline (intents -> skeletons -> code).
+
+    Default: 2-stage (intents -> skeletons)
+    With --stages 3: Full pipeline (intents -> test cases -> C++ code)
+    """
     setup_logging()
     settings = Settings()
 
-    console.print("[bold blue]Running Full Test Generation Pipeline[/bold blue]")
+    console.print(f"[bold blue]Running {'3' if stages == 3 else '2'}-Stage Test Generation Pipeline[/bold blue]")
     console.print(f"Query: {query}\n")
 
     pipeline = TestGenerationPipeline(settings)
 
     # Run full pipeline
     with console.status("[bold green]Running pipeline..."):
-        result = pipeline.run_full_pipeline(query, k=k, use_rag_for_skeletons=rag_stage2)
+        if stages == 3:
+            result = pipeline.run_full_pipeline_3stage(query, k=k, use_rag_for_code=rag_later_stages)
+        else:
+            result = pipeline.run_full_pipeline(query, k=k, use_rag_for_skeletons=rag_later_stages)
 
     # Display results
     console.print("\n[yellow]Retrieved Documents:[/yellow]")
@@ -239,18 +287,35 @@ def generate_pipeline(
         console.print(table)
 
     # Stage 2 Results
-    console.print("\n[green]Stage 2: Generated Test Skeletons[/green]")
-    syntax = Syntax(result.test_skeletons, "cpp", theme="monokai", line_numbers=True)
-    console.print(Panel(syntax, title="CUDA Test Skeletons"))
+    if stages == 3:
+        console.print("\n[green]Stage 2: Generated Test Cases (Markdown)[/green]")
+        if result.test_cases.raw_response:
+            # Show preview of test cases
+            preview = result.test_cases.raw_response[:500] + "..." if len(result.test_cases.raw_response) > 500 else result.test_cases.raw_response
+            console.print(Panel(preview, title="Test Cases Preview"))
+    else:
+        console.print("\n[green]Stage 2: Generated Test Skeletons[/green]")
+        syntax = Syntax(result.test_skeletons, "cpp", theme="monokai", line_numbers=True)
+        console.print(Panel(syntax, title="CUDA Test Skeletons"))
+
+    # Stage 3 Results
+    if stages == 3 and result.test_code:
+        console.print("\n[green]Stage 3: Generated C++ Code[/green]")
+        syntax = Syntax(result.test_code, "cpp", theme="monokai", line_numbers=True)
+        console.print(Panel(syntax, title="CUDA Test Code"))
 
     # Save outputs
     if intents_output:
         pipeline.save_intents(result.test_intents, intents_output)
         console.print(f"\n[green]Intents saved to:[/green] {intents_output}")
 
-    if skeletons_output:
+    if skeletons_output and result.test_skeletons:
         pipeline.save_skeletons(result.test_skeletons, skeletons_output)
         console.print(f"\n[green]Skeletons saved to:[/green] {skeletons_output}")
+
+    if code_output and result.test_code:
+        code_output.write_text(result.test_code)
+        console.print(f"\n[green]Code saved to:[/green] {code_output}")
 
     console.print(f"\n[bold green]Pipeline completed successfully![/bold green]")
     console.print(result.get_summary())

@@ -13,7 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from cuda_test_rag.config import Settings
 from cuda_test_rag.core.retriever import DocumentRetriever
-from cuda_test_rag.test_generation.models import PipelineResult, TestIntentCollection
+from cuda_test_rag.test_generation.models import PipelineResult, TestIntentCollection, TestCaseCollection
 from cuda_test_rag.test_generation.prompts import TestPromptTemplates
 
 
@@ -236,6 +236,122 @@ class TestGenerationPipeline:
         """
         return self.generate_skeletons(intents, additional_context)
 
+    # ==================== Stage 3: Full C++ Code Generation ====================
+
+    def generate_code(
+        self,
+        test_cases: str,
+        context: str = "",
+    ) -> str:
+        """Stage 3: Generate complete, compilable C++ test code.
+
+        Args:
+            test_cases: Test case specifications (from Stage 2 or loaded from file)
+            context: Additional CUDA context/reference
+
+        Returns:
+            Generated C++ code
+        """
+        prompt = TestPromptTemplates.get_code_generation_prompt()
+        chain = prompt | self.llm | StrOutputParser()
+
+        return chain.invoke({
+            "test_cases": test_cases,
+            "context": context or "No additional context provided.",
+        })
+
+    def generate_code_with_rag(
+        self,
+        test_cases: str,
+        context_query: str = "CUDA kernel implementation examples and patterns",
+        k: int | None = None,
+    ) -> tuple[str, str]:
+        """Stage 3 with RAG for retrieving relevant code examples.
+
+        Args:
+            test_cases: Test case specifications
+            context_query: Query for retrieving relevant examples
+            k: Number of documents to retrieve
+
+        Returns:
+            Tuple of (generated_code, retrieved_context)
+        """
+        docs = self.retriever.retrieve(context_query, k=k)
+        context = self._format_docs(docs)
+
+        code = self.generate_code(test_cases, context)
+        return code, context
+
+    def run_stage3_only(
+        self,
+        test_cases: str,
+        additional_context: str = "",
+    ) -> str:
+        """Run only Stage 3 (code generation).
+
+        Args:
+            test_cases: Test cases (from Stage 2 or loaded from file)
+            additional_context: Optional additional context
+
+        Returns:
+            Generated C++ code
+        """
+        return self.generate_code(test_cases, additional_context)
+
+    # ==================== Full 3-Stage Pipeline ====================
+
+    def run_full_pipeline_3stage(
+        self,
+        query: str,
+        k: int | None = None,
+        use_rag_for_code: bool = False,
+    ) -> PipelineResult:
+        """Run the complete three-stage pipeline.
+
+        Args:
+            query: User query describing what to test
+            k: Number of documents to retrieve
+            use_rag_for_code: Whether to use RAG in Stage 3
+
+        Returns:
+            PipelineResult with all outputs
+        """
+        result = PipelineResult(query=query)
+
+        # Stage 1: Generate intents
+        intents, context, doc_sources = self.generate_intents(query, k=k)
+        result.test_intents = intents
+        result.context = context
+        result.retrieved_documents = doc_sources
+        result.stage_completed = 1
+
+        # Stage 2: Generate test cases (markdown)
+        # Convert intents to prompt string for Stage 2
+        intents_str = intents.to_prompt_string()
+        testcase_prompt = TestPromptTemplates.get_testcase_generation_prompt()
+        testcase_chain = testcase_prompt | self.llm | StrOutputParser()
+        test_cases_md = testcase_chain.invoke({
+            "test_intents": intents_str,
+            "context": context,
+        })
+        result.test_cases = TestCaseCollection(
+            test_cases=[],
+            source_intents=intents_str,
+            raw_response=test_cases_md,
+        )
+        result.stage_completed = 2
+
+        # Stage 3: Generate C++ code
+        if use_rag_for_code:
+            code, _ = self.generate_code_with_rag(test_cases_md)
+        else:
+            code = self.generate_code(test_cases_md, context)
+
+        result.test_code = code
+        result.stage_completed = 3
+
+        return result
+
     # ==================== Persistence ====================
 
     def save_intents(self, intents: TestIntentCollection, path: Path | str) -> None:
@@ -287,3 +403,13 @@ class TestGenerationPipeline:
         """
         path = Path(path)
         path.write_text(skeletons)
+
+    def save_code(self, code: str, path: Path | str) -> None:
+        """Save generated C++ code to a file.
+
+        Args:
+            code: Generated C++ code
+            path: Output file path
+        """
+        path = Path(path)
+        path.write_text(code)

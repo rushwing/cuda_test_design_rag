@@ -148,8 +148,29 @@ class TestSkeleton(BaseModel):
     code: str = Field(..., description="Generated test skeleton code")
 
 
+class TestCase(BaseModel):
+    """A generated test case from Stage 2."""
+
+    id: str = Field(..., description="Test case ID")
+    title: str = Field(..., description="Test case title")
+    description: str = Field(..., description="Detailed test description")
+    preconditions: list[str] = Field(default_factory=list, description="Test preconditions")
+    test_steps: list[str] = Field(default_factory=list, description="Step-by-step test procedure")
+    expected_results: list[str] = Field(default_factory=list, description="Expected outcomes")
+    priority: str = Field(default="Medium", description="Priority level")
+    category: str = Field(default="Functional", description="Test category")
+
+
+class TestCaseCollection(BaseModel):
+    """Collection of test cases from Stage 2."""
+
+    test_cases: list[TestCase] = Field(default_factory=list)
+    source_intents: str = Field(default="", description="Source test intents")
+    raw_response: str = Field(default="", description="Raw LLM response for debugging")
+
+
 class PipelineResult(BaseModel):
-    """Complete result from the two-stage pipeline."""
+    """Complete result from the multi-stage pipeline."""
 
     query: str = Field(..., description="Original user query")
     retrieved_documents: list[str] = Field(default_factory=list, description="Retrieved doc sources")
@@ -158,8 +179,13 @@ class PipelineResult(BaseModel):
         default_factory=TestIntentCollection,
         description="Generated test intents from Stage 1",
     )
-    test_skeletons: str = Field(default="", description="Generated test skeletons from Stage 2")
-    stage_completed: int = Field(default=0, description="Last completed stage (1 or 2)")
+    test_skeletons: str = Field(default="", description="Generated test skeletons from the 2-stage pipeline")
+    test_cases: TestCaseCollection = Field(
+        default_factory=TestCaseCollection,
+        description="Generated test cases from Stage 2 (3-stage pipeline)",
+    )
+    test_code: str = Field(default="", description="Generated C++ code from Stage 3")
+    stage_completed: int = Field(default=0, description="Last completed stage (1, 2, or 3)")
 
     def get_summary(self) -> str:
         """Get a summary of the pipeline result."""
@@ -167,5 +193,6 @@ class PipelineResult(BaseModel):
 Query: {self.query}
 Documents Retrieved: {len(self.retrieved_documents)}
 Test Intents Generated: {len(self.test_intents.test_intents)}
+Test Cases Generated: {len(self.test_cases.test_cases)}
 Stage Completed: {self.stage_completed}
-Skeleton Generated: {'Yes' if self.test_skeletons else 'No'}"""
+Code Generated: {'Yes' if self.test_code else 'No'}"""
