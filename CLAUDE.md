@@ -34,23 +34,23 @@ mypy src
 ### Multi-Stage Test Generation Pipeline
 
 ```
-Documents → RAG Retrieval → Rerank [TODO] → Stage 1 (Intents) → Stage 2 (Test Cases) → Stage 3 (Skeletons) [TODO]
+Documents → RAG Retrieval → [Rerank (Optional)] → Stage 1 (Intents) → Stage 2 (Test Cases) → Stage 3 (C++ Code)
 ```
 
 - **Stage 1**: Extracts WHAT to test and WHY from design docs → outputs YAML with `TestIntent` objects
-- **Stage 2**: Generates detailed test case descriptions → outputs test case specifications
-- **Stage 3** [TODO]: Generates HOW to test → outputs GoogleTest C++ code skeletons
+- **Stage 2**: Generates detailed test case descriptions → outputs test case specifications (Markdown)
+- **Stage 3**: Generates HOW to test → outputs **compilable** GoogleTest C++ code
 
 The intermediate YAML can be reviewed/edited between stages.
 
 ### RAG Retrieval
 
-| Component | Current Implementation | TODO |
-|-----------|----------------------|------|
-| Embeddings | Google GenAI (`models/embedding-001`) or HuggingFace (`all-MiniLM-L6-v2`) | - |
-| Vector Store | ChromaDB (persistent) | - |
-| Retrieval | Top-K similarity search | - |
-| Reranking | **Not implemented** | Cohere Rerank / Cross-Encoder / BGE-Reranker |
+| Component | Current Implementation | Status |
+|-----------|----------------------|--------|
+| Embeddings | Google GenAI (`models/embedding-001`) or HuggingFace (`all-MiniLM-L6-v2`) | ✅ |
+| Vector Store | ChromaDB (persistent) | ✅ |
+| Retrieval | Top-K similarity search | ✅ |
+| Reranking | BGE Reranker (`BAAI/bge-reranker-v2-m3`) | ✅ (Optional, via `RERANKER_TYPE=bge`) |
 
 ### Architecture Diagram
 

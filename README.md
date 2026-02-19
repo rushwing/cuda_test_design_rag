@@ -23,8 +23,8 @@ For more stable and controllable test generation, this tool uses a multi-stage a
 │                                                                └────┬─────┘  │
 │                                                                     │        │
 │                                            ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ▼ ─ ─ ┐  │
-│                                            │   Rerank [TODO]             │  │
-│                                            │   (Cohere/Cross-Encoder)    │  │
+│                                            │   Rerank (BGE)              │  │
+│                                            │   [Optional, enabled via env]│  │
 │                                            └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┬ ─ ─ ┘  │
 │                                                                     │        │
 └─────────────────────────────────────────────────────────────────────┼────────┘
@@ -39,14 +39,14 @@ For more stable and controllable test generation, this tool uses a multi-stage a
                                                 ▼
 ┌─────────────────────────────────────────────────────────────┐
 │          Stage 2: Test Intents → Test Cases                  │
-│  Generate detailed test case descriptions                    │
+│  Generate detailed test case descriptions (Markdown)        │
 └─────────────────────────────────────────────────────────────┘
                                                 │
                                                 ▼
-┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
-│          Stage 3: Test Cases → Test Skeletons  [TODO]        │
-│  Generate GoogleTest C++ code skeletons                      │
-└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
+┌─────────────────────────────────────────────────────────────┐
+│          Stage 3: Test Cases → C++ Code                      │
+│  Generate compilable GoogleTest C++ code                     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 **Benefits:**
