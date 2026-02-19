@@ -72,12 +72,12 @@ class DocumentRetriever:
             List of (document, rerank_score) tuples
         """
         k = k or self.settings.retrieval_k
-        docs = self.vectorstore_manager.similarity_search(query, k=k)
 
         if self.reranker is None:
             # Return similarity scores if no reranker
             return self.vectorstore_manager.vectorstore.similarity_search_with_score(query, k=k)
 
+        docs = self.vectorstore_manager.similarity_search(query, k=k)
         top_k = self.settings.reranker_top_k or k
         return self.reranker.rerank(query, docs, top_k=top_k)
 

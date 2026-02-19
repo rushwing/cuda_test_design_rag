@@ -3,7 +3,6 @@
 from typing import Optional
 
 from langchain_core.documents import Document
-from langchain_huggingface import HuggingFaceEmbeddings
 
 from cuda_test_rag.config import Settings
 
@@ -60,8 +59,8 @@ class BGEReranker:
         # Extract text content for reranking
         doc_texts = [doc.page_content for doc in documents]
 
-        # Compute reranking scores
-        scores = self.model.compute_score([query] * len(doc_texts), doc_texts)
+        # Compute reranking scores — FlagReranker expects a list of [query, passage] pairs
+        scores = self.model.compute_score([[query, text] for text in doc_texts])
 
         # Pair documents with scores and sort
         scored_docs = list(zip(documents, scores))

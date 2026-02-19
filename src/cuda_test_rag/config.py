@@ -1,6 +1,7 @@
 """Configuration management using pydantic-settings."""
 
 from pathlib import Path
+from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
         default="BAAI/bge-reranker-v2-m3",
         description="Reranker model name",
     )
-    reranker_top_k: int = Field(
+    reranker_top_k: Optional[int] = Field(
         default=None,
         description="Number of docs to return after reranking (default: same as retrieval_k)",
     )

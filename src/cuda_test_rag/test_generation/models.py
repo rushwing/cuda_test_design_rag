@@ -179,9 +179,10 @@ class PipelineResult(BaseModel):
         default_factory=TestIntentCollection,
         description="Generated test intents from Stage 1",
     )
+    test_skeletons: str = Field(default="", description="Generated test skeletons from the 2-stage pipeline")
     test_cases: TestCaseCollection = Field(
         default_factory=TestCaseCollection,
-        description="Generated test cases from Stage 2",
+        description="Generated test cases from Stage 2 (3-stage pipeline)",
     )
     test_code: str = Field(default="", description="Generated C++ code from Stage 3")
     stage_completed: int = Field(default=0, description="Last completed stage (1, 2, or 3)")
